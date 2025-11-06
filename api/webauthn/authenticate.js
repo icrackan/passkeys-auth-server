@@ -1,10 +1,11 @@
 const admin = require('firebase-admin');
 const { generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 
-const rpID = process.env.RP_ID || 'annv.auth';
+const rpID = process.env.RP_ID || 'passkey-auth-demo-6zgzrae7i-icrackans-projects.vercel.app';
 const expectedOrigins = [
   `https://${rpID}`,
-  "android:apk-key-hash:H8aaJx3lOZCaxVnsZU5__ALkVjXJALA11rtegEE0Ldc"
+  "android:apk-key-hash:H8aaJx3lOZCaxVnsZU5__ALkVjXJALA11rtegEE0Ldc",
+  "https://passkey-auth-demo-6zgzrae7i-icrackans-projects.vercel.app"
 ];
 
 function initFirebase() {
