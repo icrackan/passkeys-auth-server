@@ -1,22 +1,52 @@
 const admin = require('firebase-admin');
 const { generateRegistrationOptions, verifyRegistrationResponse } = require('@simplewebauthn/server');
+const crypto = require('crypto');
 
-const rpID = process.env.RP_ID || 'passkey-auth-demo-6zgzrae7i-icrackans-projects.vercel.app';
+const rpID = process.env.RP_ID || 'passkey-auth-demo.vercel.app';
 const expectedOrigins = [
   `https://${rpID}`,
   "android:apk-key-hash:H8aaJx3lOZCaxVnsZU5__ALkVjXJALA11rtegEE0Ldc",
-  "https://passkey-auth-demo-6zgzrae7i-icrackans-projects.vercel.app"
+  "https://passkey-auth-demo.vercel.app"
 ];
 
 function initFirebase() {
-  if (admin.apps.length) return;
+  if (admin.apps.length) {
+    console.log('Firebase already initialized');
+    return;
+  }
+  
+  console.log('Starting Firebase initialization...');
+  
   const svcBase64 = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!svcBase64) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT env var');
-  const svcJson = JSON.parse(Buffer.from(svcBase64, 'base64').toString('utf8'));
-  admin.initializeApp({
-    credential: admin.credential.cert(svcJson),
-    databaseURL: process.env.FIREBASE_DATABASE_URL
-  });
+  if (!svcBase64) {
+    console.error('FIREBASE_SERVICE_ACCOUNT env var is missing');
+    throw new Error('Missing FIREBASE_SERVICE_ACCOUNT env var');
+  }
+  console.log('Service account base64 found, length:', svcBase64.length);
+  
+  let svcJson;
+  try {
+    const decoded = Buffer.from(svcBase64, 'base64').toString('utf8');
+    svcJson = JSON.parse(decoded);
+    console.log('Service account decoded successfully. Project ID:', svcJson.project_id);
+  } catch (error) {
+    console.error('Failed to decode/parse service account:', error);
+    throw error;
+  }
+
+  const dbUrl = process.env.FIREBASE_DATABASE_URL;
+  console.log('Database URL:', dbUrl);
+  
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(svcJson),
+      databaseURL: dbUrl
+    });
+    console.log('Firebase initialized successfully');
+  } catch (error) {
+    console.error('Firebase initialization error:', error);
+    throw error;
+  }
 }
 
 // Helper to get user from database
@@ -38,8 +68,15 @@ async function addUserCredential(username, credential) {
 
 module.exports = async (req, res) => {
   try {
-    // Initialize Firebase
-    initFirebase();
+      // Initialize Firebase
+    try {
+      console.log('Initializing Firebase...');
+      initFirebase();
+      console.log('Firebase initialized successfully');
+    } catch (error) {
+      console.error('Firebase initialization error:', error);
+      throw error;
+    }
 
     // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', expectedOrigins);
@@ -66,7 +103,15 @@ module.exports = async (req, res) => {
       }
 
       // Generate registration options
-      const options = generateRegistrationOptions({
+      console.log('Generating registration options...');
+      console.log('rpID:', rpID);
+      
+      // Generate a random challenge as ArrayBuffer
+      const challengeBuffer = new Uint8Array(32);
+      crypto.randomFillSync(challengeBuffer);
+      const challenge = challengeBuffer.buffer;
+      
+      const generationInput = {
         rpName: 'WebAuthn Demo',
         rpID,
         userID: username,
@@ -76,17 +121,69 @@ module.exports = async (req, res) => {
         authenticatorSelection: {
           residentKey: 'required',
           userVerification: 'preferred',
+        },
+        timeout: 60000,
+        excludeCredentials: [],
+        challenge // Add our own challenge
+      };
+      
+      console.log('Generation input:', JSON.stringify(generationInput, null, 2));
+      
+      try {
+        const options = generateRegistrationOptions(generationInput);
+        
+        // Log raw options object
+        console.log('Raw options:', JSON.stringify(options, null, 2));
+        
+        // Log specific fields
+        console.log('Challenge present:', !!options.challenge);
+        console.log('Challenge type:', typeof options.challenge);
+        if (options.challenge) {
+          console.log('Challenge length:', options.challenge.length);
+          console.log('Challenge preview:', options.challenge.slice(0, 10));
         }
-      });
+        
+        if (!options.challenge) {
+          throw new Error('Challenge not generated');
+        }
 
-      // Store challenge in database for verification
-      await addUser(username, {
+        // Store user data
+        await addUser(username, {
+          username,
+          displayName,
+          currentChallenge: Buffer.from(challengeBuffer).toString('base64')
+        });
+
+        // Send options to client
+        return res.json(options);
+        
+      } catch (error) {
+        console.error('Error generating options:', error);
+        return res.status(500).json({ error: error.message });
+      }
+
+      // Debug log options to help diagnose missing fields
+      console.log('Registration options generated:', JSON.stringify(options, null, 2));
+      console.log('Challenge present:', !!options.challenge);
+
+      // Validate challenge before storing
+      if (!options || !options.challenge) {
+        console.error('Invalid options or missing challenge:', options);
+        throw new Error('Registration options missing challenge');
+      }
+
+      const userToSave = {
         id: username,
         username,
         displayName,
         currentChallenge: options.challenge,
         credentials: []
-      });
+      };
+      
+      console.log('Saving user data:', JSON.stringify(userToSave, null, 2));
+      
+      // Store challenge in database for verification
+      await addUser(username, userToSave);
 
       return res.json(options);
     }

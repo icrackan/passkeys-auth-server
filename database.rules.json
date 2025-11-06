@@ -1,11 +1,11 @@
 {
   "rules": {
     "users": {
-      ".read": false,
-      ".write": false,
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": "username"
     },
-    ".read": false,
-    ".write": false
+    ".read": "auth != null",
+    ".write": "auth != null"
   }
 }
