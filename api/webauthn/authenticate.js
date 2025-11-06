@@ -1,7 +1,7 @@
 const admin = require('firebase-admin');
 const { generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 
-const rpID = process.env.RP_ID || 'auth.tomcolvin.co.uk';
+const rpID = process.env.RP_ID || 'annv.auth';
 const expectedOrigins = [
   `https://${rpID}`,
   "android:apk-key-hash:H8aaJx3lOZCaxVnsZU5__ALkVjXJALA11rtegEE0Ldc"
