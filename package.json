@@ -4,13 +4,16 @@
   "private": true,
   "dependencies": {
     "@simplewebauthn/server": "^8.3.5",
+    "@types/express-session": "^1.18.2",
     "dotenv": "^16.3.1",
-    "firebase-admin": "^11.11.0"
+    "express-session": "^1.18.2",
+    "firebase-admin": "^11.11.0",
+    "memorystore": "^1.6.7"
   },
   "engines": {
     "node": ">=16.0.0"
   },
   "devDependencies": {
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^2.7.0"
   }
 }
